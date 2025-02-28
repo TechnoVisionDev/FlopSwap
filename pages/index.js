@@ -1,114 +1,116 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { useState, useEffect } from "react";
+import { ethers } from "ethers";
 
 export default function Home() {
-  return (
-    <div
-      className={`${geistSans.variable} ${geistMono.variable} grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]`}
-    >
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              pages/index.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [provider, setProvider] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [txid, setTxid] = useState("");
+  const [targetAddress, setTargetAddress] = useState(""); // Target address for FLOP to WFLOP
+  const [status, setStatus] = useState("");
+  const [statusType, setStatusType] = useState(""); // "success" or "error"
+  const [isLoading, setIsLoading] = useState(false);
+  const [swapOption, setSwapOption] = useState("FLOP_TO_WFLOP");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const depositAddress = process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS;
+  const wfloBurnAddress = process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS;
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      const prov = new ethers.providers.Web3Provider(window.ethereum);
+      setProvider(prov);
+    }
+  }, []);
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      alert("Please install MetaMask.");
+      return;
+    }
+    try {
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      setAccount(accounts[0]);
+      setTargetAddress(accounts[0]); // Auto-fill target address when connecting
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!txid) {
+      alert("Please enter a transaction ID.");
+      return;
+    }
+    if (!targetAddress) {
+      alert("Please enter a valid address for the WFLOP to be sent.");
+      return;
+    }
+
+    setStatus("Processing transaction...");
+    setStatusType("");
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/bridge-swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionHash: txid,
+          userAddress: targetAddress,
+          swapOption,
+        }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setStatusType("success");
+        setStatus(`Success: ${data.message} ${data.polygonTxHash ? "Polygon TX: " + data.polygonTxHash : ""}`);
+      } else {
+        setStatusType("error");
+        setStatus(`${data.error}.`);
+      }
+    } catch (error) {
+      console.error("Error submitting transaction:", error);
+      setStatusType("error");
+      setStatus("An unexpected issue occurred. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#212121] flex flex-col items-center justify-center p-4">
+      <div className="mb-4 flex space-x-2">
+        <button onClick={() => setSwapOption("FLOP_TO_WFLOP")} className={`px-4 py-2 rounded ${swapOption === "FLOP_TO_WFLOP" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"}`}>FLOP to WFLOP</button>
+        <button onClick={() => setSwapOption("WFLOP_TO_FLOP")} className={`px-4 py-2 rounded ${swapOption === "WFLOP_TO_FLOP" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"}`}>WFLOP to FLOP</button>
+      </div>
+      <div className="max-w-xl w-full bg-white shadow-md rounded-lg p-6">
+        <h1 className="text-3xl font-bold mb-8 text-center text-[#212121]">{swapOption === "FLOP_TO_WFLOP" ? "FLOP to WFLOP Bridge" : "WFLOP to FLOP Bridge"}</h1>
+        {swapOption === "FLOP_TO_WFLOP" ? (
+          <>
+            <p className="mb-4 text-center text-black">To swap FLOP to WFLOP, please send your FLOP tokens to the following deposit address:</p>
+            <p className="font-mono text-blue-600 text-center mb-4">{depositAddress}</p>
+            <p className="mb-4 text-center text-black">Once the transfer is confirmed, enter the transaction ID and the address where you’d like to receive your WFLOP tokens.</p>
+            <label className="block text-gray-700 mb-2">Enter WFLOP Address to receive tokens:</label>
+            <input type="text" value={targetAddress} onChange={(e) => setTargetAddress(e.target.value)} placeholder="Enter WFLOP address" className="w-full text-black p-2 border border-gray-300 rounded mb-4" disabled={isLoading} />
+            <button className="bg-blue-500 text-white px-6 py-3 rounded-md mb-4" onClick={connectWallet}>Connect to MetaMask</button>
+          </>
+        ) : (
+          <>
+            <p className="mb-4 text-center text-black">To swap WFLOP to FLOP, please send your WFLOP tokens to the designated burn address:</p>
+            <p className="font-mono text-blue-600 text-center mb-4">{wfloBurnAddress}</p>
+            <p className="mb-4 text-center text-black">Once the transfer is confirmed, enter the transaction ID and the FLOP address where you’d like to receive your tokens.</p>
+            <label className="block text-gray-700 mb-2">Enter FLOP Address to receive coins:</label>
+            <input type="text" value={targetAddress} onChange={(e) => setTargetAddress(e.target.value)} placeholder="Enter FLOP address" className="w-full text-black p-2 border border-gray-300 rounded mb-4" disabled={isLoading} />
+          </>
+        )}
+        <form onSubmit={handleSubmit}>
+          <label className="block text-gray-700 mb-2">Transaction ID:</label>
+          <input type="text" value={txid} onChange={(e) => setTxid(e.target.value)} placeholder="Enter TXID" className="w-full p-2 border text-black border-gray-300 rounded mb-4" disabled={isLoading} />
+          <button type="submit" className="w-full bg-green-500 text-white px-6 py-3 rounded-md" disabled={isLoading}>{isLoading ? "Processing..." : "Submit Transaction"}</button>
+        </form>
+        <p className={`mt-4 text-center ${statusType === "success" ? "text-green-500" : statusType === "error" ? "text-red-500" : "text-black"}`}>{status}</p>
+      </div>
     </div>
   );
 }
