@@ -117,14 +117,14 @@ export default function Home() {
             </p>
             <p className="font-mono text-blue-600 text-center mb-4">{depositAddress}</p>
             <p className="mb-4 text-center text-black">
-              Once the transfer is confirmed, enter the transaction ID and the address where you’d like to receive your WFLOP tokens.
+              Once the transfer is confirmed, enter the transaction ID for your deposit and the Polygon (POL) address where you’d like to receive your WFLOP tokens.
             </p>
-            <label className="block text-gray-700 mb-2">Enter WFLOP Address to receive tokens:</label>
+            <label className="block text-gray-700 mb-2">Polygon Address:</label>
             <input
               type="text"
               value={targetAddress}
               onChange={(e) => setTargetAddress(e.target.value)}
-              placeholder="Enter WFLOP address"
+              placeholder="Enter POL Address"
               className="w-full text-black p-2 border border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
@@ -139,21 +139,21 @@ export default function Home() {
             </p>
             <p className="font-mono text-blue-600 text-center mb-4">{wfloBurnAddress}</p>
             <p className="mb-4 text-center text-black">
-              Once the transfer is confirmed, enter the transaction ID and the FLOP address where you’d like to receive your tokens.
+              Once the transfer is confirmed, enter the transaction ID for your deposit and the Flopcoin (FLOP) address where you’d like to receive your tokens.
             </p>
-            <label className="block text-gray-700 mb-2">Enter FLOP Address to receive coins:</label>
+            <label className="block text-gray-700 mb-2">Flopcoin Address:</label>
             <input
               type="text"
               value={targetAddress}
               onChange={(e) => setTargetAddress(e.target.value)}
-              placeholder="Enter FLOP address"
+              placeholder="Enter FLOP Address"
               className="w-full text-black p-2 border border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
           </>
         )}
         <form onSubmit={handleSubmit}>
-          <label className="block text-gray-700 mb-2">Transaction ID:</label>
+          <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
           <input
             type="text"
             value={txid}
