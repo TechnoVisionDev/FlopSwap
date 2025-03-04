@@ -5,7 +5,9 @@ import { MongoClient } from "mongodb";
 let cachedDb = null;
 async function connectToDatabase() {
   if (cachedDb) return cachedDb;
-  const client = new MongoClient(process.env.MONGODB_URI);
+  const client = new MongoClient(process.env.MONGODB_URI, {
+    tlsAllowInvalidCertificates: true,
+  });  
   await client.connect();
   const db = client.db(process.env.MONGODB_DB);
   cachedDb = db;
