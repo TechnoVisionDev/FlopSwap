@@ -2,19 +2,22 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 
 export default function Home() {
-  // The Ethereum wallet address that will sign the message (only used for WFLOP → FLOP).
+  // For WFLOP → FLOP: automatically get the signing address from MetaMask.
   const [signerAddress, setSignerAddress] = useState("");
-  // The target address where the tokens/coins should be sent.
+  // For FLOP → WFLOP: user must manually provide their FLOP wallet address.
+  const [flopSignerAddress, setFlopSignerAddress] = useState("");
+
+  // The target address where tokens/coins should be sent.
   // For FLOP → WFLOP, this is the Polygon address.
   // For WFLOP → FLOP, this is the FLOP address.
   const [targetAddress, setTargetAddress] = useState("");
   // The transaction ID.
-  // For FLOP → WFLOP, this is the FLOP deposit TXID.
-  // For WFLOP → FLOP, this is the burn TXID.
   const [txid, setTxid] = useState("");
-  // The signature produced by signing the TXID (only for WFLOP → FLOP).
+  // The signature produced by signing the TXID.
+  // For WFLOP → FLOP, this is automatically produced via MetaMask.
+  // For FLOP → WFLOP, the user must input the signature from their FLOP wallet.
   const [signature, setSignature] = useState("");
-  // We use the TXID as the signed message (only for WFLOP → FLOP).
+  // We use the TXID as the signed message.
   const [signMessageText, setSignMessageText] = useState("");
   // Swap option: either "FLOP_TO_WFLOP" or "WFLOP_TO_FLOP"
   const [swapOption, setSwapOption] = useState("FLOP_TO_WFLOP");
@@ -32,7 +35,7 @@ export default function Home() {
     }
   }, []);
 
-  // Function to connect wallet if not already connected.
+  // For WFLOP → FLOP: Connect wallet if not already connected.
   const ensureWalletConnected = async () => {
     if (!window.ethereum) {
       alert("Please install MetaMask.");
@@ -46,11 +49,20 @@ export default function Home() {
     return signerAddress;
   };
 
-  // Function to sign the TXID automatically (only used for WFLOP → FLOP)
+  // Function to autopopulate the Polygon address field using MetaMask
+  const useMetaMaskAddress = async () => {
+    try {
+      const addr = await ensureWalletConnected();
+      setTargetAddress(addr);
+    } catch (error) {
+      console.error("Error fetching MetaMask address:", error);
+    }
+  };
+
+  // For WFLOP → FLOP: sign the TXID automatically via MetaMask.
   const signTxid = async (currentProvider, txidToSign) => {
     try {
       const signer = currentProvider.getSigner();
-      // Use the TXID as the message.
       const message = txidToSign;
       const sig = await signer.signMessage(message);
       setSignature(sig);
@@ -62,11 +74,16 @@ export default function Home() {
     }
   };
 
-  // Combined submit handler: connect wallet, sign TXID if needed, then submit.
+  // Handle submission for both flows.
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!txid || !targetAddress) {
       alert("Please fill in all required fields.");
+      return;
+    }
+    // For FLOP → WFLOP, also require the FLOP wallet address and signature.
+    if (swapOption === "FLOP_TO_WFLOP" && (!flopSignerAddress || !signature)) {
+      alert("Please fill in your FLOP wallet address and signature.");
       return;
     }
     setIsLoading(true);
@@ -74,27 +91,31 @@ export default function Home() {
     setStatusType("");
 
     try {
-      // Ensure wallet is connected.
-      const connectedAddress = await ensureWalletConnected();
-
-      let sig = "";
-      // Only sign the TXID if the flow is WFLOP → FLOP.
+      let payload = {};
       if (swapOption === "WFLOP_TO_FLOP") {
-        sig = await signTxid(provider, txid);
+        // Use MetaMask to sign.
+        const connectedAddress = await ensureWalletConnected();
+        const sig = await signTxid(provider, txid);
+        payload = {
+          transactionHash: txid,
+          signerAddress: connectedAddress,
+          targetAddress,
+          swapOption,
+          signature: sig,
+          signMessageText: txid
+        };
+      } else {
+        // FLOP → WFLOP: use manually provided FLOP wallet address and signature.
+        payload = {
+          transactionHash: txid,
+          signerAddress: flopSignerAddress,
+          targetAddress,
+          swapOption,
+          signature: signature,
+          signMessageText: txid
+        };
       }
 
-      // Prepare the payload.
-      const payload = {
-        transactionHash: txid,
-        signerAddress: connectedAddress,
-        targetAddress,
-        swapOption,
-        // For WFLOP → FLOP include signature; for FLOP → WFLOP send empty strings.
-        signature: swapOption === "WFLOP_TO_FLOP" ? sig : "",
-        signMessageText: swapOption === "WFLOP_TO_FLOP" ? txid : ""
-      };
-
-      // Submit the payload to the backend.
       const response = await fetch("/api/bridge-swap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,6 +152,7 @@ export default function Home() {
             setTargetAddress("");
             setSignature("");
             setSignMessageText("");
+            setFlopSignerAddress("");
           }}
           className={`px-4 py-2 rounded ${swapOption === "FLOP_TO_WFLOP" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"}`}
         >
@@ -155,56 +177,100 @@ export default function Home() {
         </h1>
         {swapOption === "FLOP_TO_WFLOP" ? (
           <>
-            <p className="mb-4 text-center text-black">
-              To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below:
-            </p>
-            <p className="font-mono text-blue-600 text-center mb-4">
-              {process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS}
-            </p>
-            <p className="mb-4 text-center text-black">
-              Once the deposit is confirmed, enter the Polygon address where you’d like to receive your WFLOP tokens and the Flopcoin transaction ID for the deposit you just made.
-            </p>
+            <div className="mb-4 text-left text-black">
+              <p className="mb-4 text-left text-black">
+              <b>1.)</b> To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below.
+              Make sure you only use the Flopcoin Core wallet for this transaction!
+              </p>
+              <p className="font-mono text-blue-600 text-left mb-4">
+                {process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS}
+              </p>
+              <p className="mt-2">
+                <span className="font-bold">2.)</span> Once the deposit is confirmed, enter your Flopcoin Core wallet address, the Polygon (POL) address where you would like to receive your WFLOP, and the FLOP transaction ID for the deposit you just made.
+              </p>
+              <p className="mt-2">
+                <span className="font-bold">3.)</span> To prove you made the deposit, you must sign a message using your Flopcoin Core wallet. The message <strong>MUST</strong> only contain the exact TXID as you specified here. Make sure you sign using the wallet address you used to deposit your coins to the bridge.
+              </p>
+            </div>
             <label className="block text-gray-700 mb-2">Polygon Address:</label>
+            <div className="flex items-center mb-4">
+              <input
+                type="text"
+                value={targetAddress}
+                onChange={(e) => setTargetAddress(e.target.value)}
+                placeholder="Enter Polygon Address to Receive WFLOP"
+                className="w-full text-black p-2 border border-gray-300 rounded"
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                onClick={useMetaMaskAddress}
+                className="ml-2 px-4 py-2 bg-blue-500 text-white rounded"
+                disabled={isLoading}
+              >
+                MetaMask
+              </button>
+            </div>
+            <label className="block text-gray-700 mb-2">Flopcoin Core Address:</label>
             <input
               type="text"
-              value={targetAddress}
-              onChange={(e) => setTargetAddress(e.target.value)}
-              placeholder="Enter Polygon Address"
+              value={flopSignerAddress}
+              onChange={(e) => setFlopSignerAddress(e.target.value)}
+              placeholder="Enter Your Flopcoin Core Address"
+              className="w-full text-black p-2 border border-gray-300 rounded mb-4"
+              disabled={isLoading}
+            />
+            <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
+            <input
+              type="text"
+              value={txid}
+              onChange={(e) => setTxid(e.target.value)}
+              placeholder="Enter Deposit TXID"
+              className="w-full p-2 border text-black border-gray-300 rounded mb-4"
+              disabled={isLoading}
+            />
+            <label className="block text-gray-700 mb-2">Signature (Base64):</label>
+            <input
+              type="text"
+              value={signature}
+              onChange={(e) => setSignature(e.target.value)}
+              placeholder="Enter Signature From FLOP Wallet"
               className="w-full text-black p-2 border border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
           </>
         ) : (
           <>
-            <p className="mb-4 text-center text-black">
-              To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below:
+            <p className="mb-4 text-left text-black">
+              <b>1.)</b> To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below.
+              Make sure you only use a MetaMask account for this transaction!
             </p>
-            <p className="font-mono text-blue-600 text-center mb-4">
+            <p className="font-mono text-blue-600 text-left mb-4">
               {process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS}
             </p>
-            <p className="mb-4 text-center text-black">
-              Once the deposit is confirmed, enter the Flopcoin address where you’d like to receive your FLOP coins and the Polygon transaction ID for the deposit you just made.
+            <p className="mb-4 text-left text-black">
+              <b>2.)</b> Once the deposit is confirmed, enter the Flopcoin address where you’d like to receive your FLOP coins and the Polygon transaction ID for the deposit you just made. You will be asked to sign the transaction using MetaMask so make sure it is installed.
             </p>
             <label className="block text-gray-700 mb-2">Flopcoin Address:</label>
             <input
               type="text"
               value={targetAddress}
               onChange={(e) => setTargetAddress(e.target.value)}
-              placeholder="Enter FLOP Address"
+              placeholder="Enter Flopcoin Address to Receive FLOP"
               className="w-full text-black p-2 border border-gray-300 rounded mb-4"
+              disabled={isLoading}
+            />
+            <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
+            <input
+              type="text"
+              value={txid}
+              onChange={(e) => setTxid(e.target.value)}
+              placeholder="Enter Deposit TXID"
+              className="w-full p-2 border text-black border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
           </>
         )}
-        <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
-        <input
-          type="text"
-          value={txid}
-          onChange={(e) => setTxid(e.target.value)}
-          placeholder="Enter TXID"
-          className="w-full p-2 border text-black border-gray-300 rounded mb-4"
-          disabled={isLoading}
-        />
         <form onSubmit={handleSubmit}>
           <button
             type="submit"
@@ -217,7 +283,6 @@ export default function Home() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
                 </svg>
-                Processing...
               </>
             ) : (
               "Submit Transaction"
