@@ -7,7 +7,7 @@ async function connectToDatabase() {
   if (cachedDb) return cachedDb;
   const client = new MongoClient(process.env.MONGODB_URI, {
     tlsAllowInvalidCertificates: true,
-  });  
+  });
   await client.connect();
   const db = client.db(process.env.MONGODB_DB);
   cachedDb = db;
@@ -70,9 +70,22 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { transactionHash, userAddress, swapOption } = req.body;
-  if (!transactionHash || !userAddress || !swapOption) {
-    return res.status(400).json({ error: "Missing parameters. Please provide a valid transaction ID and address." });
+  // Expect these fields in the request body:
+  // transactionHash, signerAddress, targetAddress, swapOption, signature, signMessageText
+  const { transactionHash, signerAddress, targetAddress, swapOption, signature, signMessageText } = req.body;
+  if (!transactionHash || !signerAddress || !targetAddress || !swapOption) {
+    return res.status(400).json({ error: "Missing parameters. Please provide all required fields." });
+  }
+
+  // For WFLOP → FLOP flow, verify the signature.
+  if (swapOption === "WFLOP_TO_FLOP") {
+    let recoveredAddress;
+    try {
+      recoveredAddress = ethers.utils.verifyMessage(signMessageText, signature);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid signature." });
+    }
+    // The recovered address will be further verified against the burn event sender later.
   }
 
   // --- Check for duplicate TXIDs in MongoDB ---
@@ -86,9 +99,9 @@ export default async function handler(req, res) {
   try {
     if (swapOption === "FLOP_TO_WFLOP") {
       // ---------- FLOP → WFLOP Flow ----------
-      // Validate that the provided WFLOP (Polygon) address is valid
-      if (!ethers.utils.isAddress(userAddress)) {
-        return res.status(400).json({ error: "Invalid WFLOP address provided. Please enter a valid Polygon address." });
+      // Validate that the provided Polygon address is valid.
+      if (!ethers.utils.isAddress(targetAddress)) {
+        return res.status(400).json({ error: "Invalid Polygon address provided. Please enter a valid address." });
       }
 
       const rpcPayload = {
@@ -144,7 +157,7 @@ export default async function handler(req, res) {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, bridgeWallet);
       const currentGasPrice = await polygonProvider.getGasPrice();
       const adjustedGasPrice = currentGasPrice.mul(110).div(100);
-      const tx = await contract.mint(userAddress, depositAmount, { gasPrice: adjustedGasPrice });
+      const tx = await contract.mint(targetAddress, depositAmount, { gasPrice: adjustedGasPrice });
 
       let receipt;
       try {
@@ -170,27 +183,44 @@ export default async function handler(req, res) {
       });
     } else if (swapOption === "WFLOP_TO_FLOP") {
       // ---------- WFLOP → FLOP Flow ----------
-      // Validate that the provided address is a valid FLOP address.
+      // Validate that the provided target FLOP address is valid.
       // (Assumes a valid FLOP address starts with "F" and is 34 characters long)
-      if (!/^F[a-zA-Z0-9]{33}$/.test(userAddress)) {
+      if (!/^F[a-zA-Z0-9]{33}$/.test(targetAddress)) {
         return res.status(400).json({ error: "Invalid FLOP address provided. Please enter a valid FLOP address." });
       }
 
+      // Instantiate a Polygon provider and retrieve the transaction receipt.
       const polygonProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
       const txReceipt = await polygonProvider.getTransactionReceipt(transactionHash);
       if (!txReceipt) {
         return res.status(400).json({ error: "Unable to retrieve transaction confirmation from Polygon. Please try again later." });
       }
 
+      // Recover the signer from the signature (we expect signMessageText === transactionHash)
+      let recoveredSigner;
+      try {
+        recoveredSigner = ethers.utils.verifyMessage(transactionHash, signature);
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid signature during burn verification." });
+      }
+
+      // Look for the burn event. For a standard ERC-20 Transfer event:
+      // topic[0] is the event signature,
+      // topic[1] is the "from" address,
+      // topic[2] is the "to" address.
       const transferTopic = ethers.utils.id("Transfer(address,address,uint256)");
       let burnEventFound = false;
       let burnAmount;
+      let burnSender; // the address that sent the tokens (should match recoveredSigner)
       for (const log of txReceipt.logs) {
         if (log.topics[0] === transferTopic) {
-          const to = "0x" + log.topics[2].slice(26).toLowerCase();
-          if (to === WFLOP_DEPOSIT_ADDRESS.toLowerCase()) {
+          // Check if this Transfer's "to" is the designated WFLOP burn address.
+          const toAddress = "0x" + log.topics[2].slice(26).toLowerCase();
+          if (toAddress === WFLOP_DEPOSIT_ADDRESS.toLowerCase()) {
             burnEventFound = true;
             burnAmount = ethers.BigNumber.from(log.data);
+            // Extract the "from" address from topics[1]
+            burnSender = "0x" + log.topics[1].slice(26).toLowerCase();
             break;
           }
         }
@@ -200,6 +230,12 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "No token transfer to the designated burn address was detected. Please check your transaction." });
       }
 
+      // Verify that the recovered signer matches the burn event sender.
+      if (recoveredSigner.toLowerCase() !== burnSender.toLowerCase()) {
+        return res.status(400).json({ error: "Signature does not match the burn transaction sender." });
+      }
+
+      // Proceed with the burn logic: ensure the bridge wallet holds enough tokens.
       const bridgeWallet = new ethers.Wallet(BRIDGE_PRIVATE_KEY, polygonProvider);
       if (bridgeWallet.address.toLowerCase() !== WFLOP_DEPOSIT_ADDRESS.toLowerCase()) {
         return res.status(400).json({ error: "Configuration error: Bridge wallet mismatch. Please contact support." });
@@ -264,7 +300,7 @@ export default async function handler(req, res) {
         jsonrpc: "1.0",
         id: "sendtoaddress",
         method: "sendtoaddress",
-        params: [userAddress, coinAmount]
+        params: [targetAddress, coinAmount]
       };
       const sendResponse = await fetch(flopRpcURL, {
         method: "POST",
@@ -290,7 +326,6 @@ export default async function handler(req, res) {
 
       await txCollection.insertOne({ txid: transactionHash, swapOption, createdAt: new Date() });
 
-      // For WFLOP → FLOP, return the FLOP deposit TXID (flopTxHash) for the Flopcoin block explorer.
       return res.status(200).json({
         message: "Swap Successful: WFLOP to FLOP",
         flopDepositTxHash: flopTxHash,

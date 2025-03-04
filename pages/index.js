@@ -2,18 +2,29 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 
 export default function Home() {
-  const [provider, setProvider] = useState(null);
-  const [account, setAccount] = useState(null);
+  // The Ethereum wallet address that will sign the message (only used for WFLOP → FLOP).
+  const [signerAddress, setSignerAddress] = useState("");
+  // The target address where the tokens/coins should be sent.
+  // For FLOP → WFLOP, this is the Polygon address.
+  // For WFLOP → FLOP, this is the FLOP address.
+  const [targetAddress, setTargetAddress] = useState("");
+  // The transaction ID.
+  // For FLOP → WFLOP, this is the FLOP deposit TXID.
+  // For WFLOP → FLOP, this is the burn TXID.
   const [txid, setTxid] = useState("");
-  const [targetAddress, setTargetAddress] = useState(""); // Target address for swap
+  // The signature produced by signing the TXID (only for WFLOP → FLOP).
+  const [signature, setSignature] = useState("");
+  // We use the TXID as the signed message (only for WFLOP → FLOP).
+  const [signMessageText, setSignMessageText] = useState("");
+  // Swap option: either "FLOP_TO_WFLOP" or "WFLOP_TO_FLOP"
+  const [swapOption, setSwapOption] = useState("FLOP_TO_WFLOP");
+  // Status display
   const [status, setStatus] = useState("");
   const [statusType, setStatusType] = useState(""); // "success" or "error"
   const [isLoading, setIsLoading] = useState(false);
-  const [swapOption, setSwapOption] = useState("FLOP_TO_WFLOP");
 
-  const depositAddress = process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS;
-  const wfloBurnAddress = process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS;
-
+  // Ethers provider from MetaMask (used only for WFLOP → FLOP)
+  const [provider, setProvider] = useState(null);
   useEffect(() => {
     if (typeof window !== "undefined" && window.ethereum) {
       const prov = new ethers.providers.Web3Provider(window.ethereum);
@@ -21,62 +32,90 @@ export default function Home() {
     }
   }, []);
 
-  const connectWallet = async () => {
+  // Function to connect wallet if not already connected.
+  const ensureWalletConnected = async () => {
     if (!window.ethereum) {
       alert("Please install MetaMask.");
-      return;
+      throw new Error("MetaMask not installed");
     }
-    try {
+    if (!signerAddress) {
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      setAccount(accounts[0]);
-      setTargetAddress(accounts[0]); // Auto-fill target address when connecting
-    } catch (error) {
-      console.error("Error connecting wallet:", error);
+      setSignerAddress(accounts[0]);
+      return accounts[0];
+    }
+    return signerAddress;
+  };
+
+  // Function to sign the TXID automatically (only used for WFLOP → FLOP)
+  const signTxid = async (currentProvider, txidToSign) => {
+    try {
+      const signer = currentProvider.getSigner();
+      // Use the TXID as the message.
+      const message = txidToSign;
+      const sig = await signer.signMessage(message);
+      setSignature(sig);
+      setSignMessageText(message);
+      return sig;
+    } catch (err) {
+      console.error("Error signing message:", err);
+      throw new Error("Failed to sign message");
     }
   };
 
+  // Combined submit handler: connect wallet, sign TXID if needed, then submit.
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!txid) {
-      alert("Please enter a transaction ID.");
+    if (!txid || !targetAddress) {
+      alert("Please fill in all required fields.");
       return;
     }
-    if (!targetAddress) {
-      alert("Please enter a valid address for receiving tokens/coins.");
-      return;
-    }
-
+    setIsLoading(true);
     setStatus("Processing transaction...");
     setStatusType("");
-    setIsLoading(true);
 
     try {
+      // Ensure wallet is connected.
+      const connectedAddress = await ensureWalletConnected();
+
+      let sig = "";
+      // Only sign the TXID if the flow is WFLOP → FLOP.
+      if (swapOption === "WFLOP_TO_FLOP") {
+        sig = await signTxid(provider, txid);
+      }
+
+      // Prepare the payload.
+      const payload = {
+        transactionHash: txid,
+        signerAddress: connectedAddress,
+        targetAddress,
+        swapOption,
+        // For WFLOP → FLOP include signature; for FLOP → WFLOP send empty strings.
+        signature: swapOption === "WFLOP_TO_FLOP" ? sig : "",
+        signMessageText: swapOption === "WFLOP_TO_FLOP" ? txid : ""
+      };
+
+      // Submit the payload to the backend.
       const response = await fetch("/api/bridge-swap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transactionHash: txid,
-          userAddress: targetAddress,
-          swapOption,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
-
       if (response.ok) {
         setStatusType("success");
         if (swapOption === "WFLOP_TO_FLOP") {
-          setStatus(`${data.message} ${data.flopDepositTxHash ? "" + data.flopDepositTxHash : ""}`);
+          setStatus(`${data.message} ${data.flopDepositTxHash || ""}`);
         } else {
-          setStatus(`${data.message} ${data.polygonTxHash ? "" + data.polygonTxHash : ""}`);
+          setStatus(`${data.message} ${data.polygonTxHash || ""}`);
         }
       } else {
         setStatusType("error");
-        setStatus(`${data.error}`);
+        setStatus(data.error);
       }
     } catch (error) {
-      console.error("Error submitting transaction:", error);
+      console.error("Error in handleSubmit:", error);
       setStatusType("error");
-      setStatus("An unexpected issue occurred. Please try again later.");
+      setStatus(error.message || "An unexpected issue occurred. Please try again later.");
     } finally {
       setIsLoading(false);
     }
@@ -90,6 +129,8 @@ export default function Home() {
             setSwapOption("FLOP_TO_WFLOP");
             setTxid("");
             setTargetAddress("");
+            setSignature("");
+            setSignMessageText("");
           }}
           className={`px-4 py-2 rounded ${swapOption === "FLOP_TO_WFLOP" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"}`}
         >
@@ -100,6 +141,8 @@ export default function Home() {
             setSwapOption("WFLOP_TO_FLOP");
             setTxid("");
             setTargetAddress("");
+            setSignature("");
+            setSignMessageText("");
           }}
           className={`px-4 py-2 rounded ${swapOption === "WFLOP_TO_FLOP" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"}`}
         >
@@ -115,7 +158,9 @@ export default function Home() {
             <p className="mb-4 text-center text-black">
               To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below:
             </p>
-            <p className="font-mono text-blue-600 text-center mb-4">{depositAddress}</p>
+            <p className="font-mono text-blue-600 text-center mb-4">
+              {process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS}
+            </p>
             <p className="mb-4 text-center text-black">
               Once the deposit is confirmed, enter the Polygon address where you’d like to receive your WFLOP tokens and the Flopcoin transaction ID for the deposit you just made.
             </p>
@@ -124,20 +169,19 @@ export default function Home() {
               type="text"
               value={targetAddress}
               onChange={(e) => setTargetAddress(e.target.value)}
-              placeholder="Enter POL Address"
+              placeholder="Enter Polygon Address"
               className="w-full text-black p-2 border border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
-            <button className="bg-blue-500 text-white px-6 py-3 rounded-md mb-4" onClick={connectWallet}>
-              Connect to MetaMask
-            </button>
           </>
         ) : (
           <>
             <p className="mb-4 text-center text-black">
               To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below:
             </p>
-            <p className="font-mono text-blue-600 text-center mb-4">{wfloBurnAddress}</p>
+            <p className="font-mono text-blue-600 text-center mb-4">
+              {process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS}
+            </p>
             <p className="mb-4 text-center text-black">
               Once the deposit is confirmed, enter the Flopcoin address where you’d like to receive your FLOP coins and the Polygon transaction ID for the deposit you just made.
             </p>
@@ -152,16 +196,16 @@ export default function Home() {
             />
           </>
         )}
+        <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
+        <input
+          type="text"
+          value={txid}
+          onChange={(e) => setTxid(e.target.value)}
+          placeholder="Enter TXID"
+          className="w-full p-2 border text-black border-gray-300 rounded mb-4"
+          disabled={isLoading}
+        />
         <form onSubmit={handleSubmit}>
-          <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
-          <input
-            type="text"
-            value={txid}
-            onChange={(e) => setTxid(e.target.value)}
-            placeholder="Enter TXID"
-            className="w-full p-2 border text-black border-gray-300 rounded mb-4"
-            disabled={isLoading}
-          />
           <button
             type="submit"
             className="w-full bg-green-500 text-white px-6 py-3 rounded-md flex items-center justify-center"
