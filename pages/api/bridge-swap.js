@@ -1,4 +1,19 @@
 import { ethers } from "ethers";
+import { MongoClient } from "mongodb";
+
+// --- MongoDB connection helper ---
+let cachedDb = null;
+async function connectToDatabase() {
+  if (cachedDb) return cachedDb;
+  const client = new MongoClient(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  });
+  await client.connect();
+  const db = client.db(process.env.MONGODB_DB);
+  cachedDb = db;
+  return db;
+}
 
 // FLOP node configuration (Layer‑1 fork of Dogecoin)
 const FLOP_RPC_PROTOCOL = process.env.FLOP_RPC_PROTOCOL || "http";
@@ -66,6 +81,15 @@ export default async function handler(req, res) {
   if (!transactionHash || !userAddress || !swapOption) {
     console.log("Missing parameters");
     return res.status(400).json({ error: "Missing parameters" });
+  }
+
+  // --- Connect to MongoDB and check for duplicate TXIDs ---
+  const db = await connectToDatabase();
+  const txCollection = db.collection("processedTxIds");
+  const existingTx = await txCollection.findOne({ txid: transactionHash });
+  if (existingTx) {
+    console.error("Duplicate TXID detected:", transactionHash);
+    return res.status(400).json({ error: "Transaction ID already used" });
   }
 
   try {
@@ -151,6 +175,7 @@ export default async function handler(req, res) {
         console.log("Polygon transaction confirmed, receipt:", receipt);
       } catch (confirmError) {
         console.error("Polygon confirmation error:", confirmError);
+        // Do not store TXID if the transaction did not complete
         return res.status(200).json({
           message: "Swap transaction sent, but not yet confirmed.",
           polygonTxHash: tx.hash,
@@ -158,6 +183,9 @@ export default async function handler(req, res) {
           warning: "Transaction confirmation timed out, please check later.",
         });
       }
+
+      // --- Store TXID as successfully processed ---
+      await txCollection.insertOne({ txid: transactionHash, swapOption, createdAt: new Date() });
 
       return res.status(200).json({
         message: "Swap successful: FLOP to WFLOP",
@@ -273,11 +301,13 @@ export default async function handler(req, res) {
         unlockData = await unlockResponse.json();
 
         if (unlockData.error) {
-          // Check for unencrypted wallet error (error code -15)
+          // If the error is not error code -15 (unencrypted wallet), return an error.
           if (unlockData.error.code !== -15) {
             console.error("Wallet unlock error:", unlockData.error);
             return res.status(500).json({ error: "Wallet unlock error", details: unlockData.error });
           }
+        } else {
+          console.log("Wallet unlocked successfully.");
         }
       } catch (err) {
         console.error("Error during wallet unlock RPC call:", err);
@@ -317,6 +347,9 @@ export default async function handler(req, res) {
       }
       const flopTxHash = sendData.result;
       console.log("FLOP sendtoaddress transaction hash:", flopTxHash);
+
+      // --- Store TXID as successfully processed ---
+      await txCollection.insertOne({ txid: transactionHash, swapOption, createdAt: new Date() });
 
       return res.status(200).json({
         message: "Swap successful: WFLOP to FLOP",
