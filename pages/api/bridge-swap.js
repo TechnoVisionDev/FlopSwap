@@ -70,7 +70,7 @@ export default async function handler(req, res) {
 
   const { transactionHash, userAddress, swapOption } = req.body;
   if (!transactionHash || !userAddress || !swapOption) {
-    return res.status(400).json({ error: "Please provide a valid transaction ID and address." });
+    return res.status(400).json({ error: "Missing parameters. Please provide a valid transaction ID and address." });
   }
 
   // --- Check for duplicate TXIDs in MongoDB ---
@@ -78,15 +78,15 @@ export default async function handler(req, res) {
   const txCollection = db.collection("processedTxIds");
   const existingTx = await txCollection.findOne({ txid: transactionHash });
   if (existingTx) {
-    return res.status(400).json({ error: "That transaction ID has already been used!" });
+    return res.status(400).json({ error: "This transaction ID has already been used. Please submit a new one." });
   }
 
   try {
     if (swapOption === "FLOP_TO_WFLOP") {
       // ---------- FLOP → WFLOP Flow ----------
-      // Validate the provided WFLOP Polygon address using ethers
+      // Validate that the provided WFLOP (Polygon) address is valid
       if (!ethers.utils.isAddress(userAddress)) {
-        return res.status(400).json({ error: "Please enter a valid Polygon address!" });
+        return res.status(400).json({ error: "Invalid WFLOP address provided. Please enter a valid Polygon address." });
       }
 
       const rpcPayload = {
@@ -160,7 +160,7 @@ export default async function handler(req, res) {
       await txCollection.insertOne({ txid: transactionHash, swapOption, createdAt: new Date() });
 
       return res.status(200).json({
-        message: "Swap successful: FLOP to WFLOP",
+        message: "Swap Successful: FLOP to WFLOP",
         polygonTxHash: tx.hash,
         mintedAmount: depositAmount.toString(),
         receipt,
@@ -168,10 +168,10 @@ export default async function handler(req, res) {
       });
     } else if (swapOption === "WFLOP_TO_FLOP") {
       // ---------- WFLOP → FLOP Flow ----------
-      // Validate the provided FLOP address before burning tokens.
+      // Validate that the provided address is a valid FLOP address.
       // (Assumes a valid FLOP address starts with "F" and is 34 characters long)
       if (!/^F[a-zA-Z0-9]{33}$/.test(userAddress)) {
-        return res.status(400).json({ error: "Please enter a valid FLOP address!" });
+        return res.status(400).json({ error: "Invalid FLOP address provided. Please enter a valid FLOP address." });
       }
 
       const polygonProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
@@ -288,11 +288,11 @@ export default async function handler(req, res) {
 
       await txCollection.insertOne({ txid: transactionHash, swapOption, createdAt: new Date() });
 
+      // For WFLOP → FLOP, return the FLOP deposit TXID (flopTxHash) for the Flopcoin block explorer.
       return res.status(200).json({
-        message: "Swap successful: WFLOP to FLOP",
-        polygonTxHash: transactionHash,
+        message: "Swap Successful: WFLOP to FLOP",
+        flopDepositTxHash: flopTxHash,
         burnTxHash: burnTx.hash,
-        flopTxHash,
         burnAmount: burnAmount.toString(),
         burnReceipt,
         clearFields: true

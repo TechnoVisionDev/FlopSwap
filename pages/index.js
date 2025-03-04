@@ -64,7 +64,11 @@ export default function Home() {
 
       if (response.ok) {
         setStatusType("success");
-        setStatus(`Success: ${data.message} ${data.polygonTxHash ? "Polygon TX: " + data.polygonTxHash : ""}`);
+        if (swapOption === "WFLOP_TO_FLOP") {
+          setStatus(`${data.message} ${data.flopDepositTxHash ? "" + data.flopDepositTxHash : ""}`);
+        } else {
+          setStatus(`${data.message} ${data.polygonTxHash ? "" + data.polygonTxHash : ""}`);
+        }
       } else {
         setStatusType("error");
         setStatus(`${data.error}`);
@@ -102,7 +106,7 @@ export default function Home() {
           WFLOP to FLOP
         </button>
       </div>
-      <div className="max-w-xl w-full bg-white shadow-md rounded-lg p-6">
+      <div className="max-w-3xl w-full bg-white shadow-md rounded-lg p-6">
         <h1 className="text-3xl font-bold mb-8 text-center text-[#212121]">
           {swapOption === "FLOP_TO_WFLOP" ? "FLOP to WFLOP Bridge" : "WFLOP to FLOP Bridge"}
         </h1>
@@ -165,39 +169,18 @@ export default function Home() {
           >
             {isLoading ? (
               <>
-                <svg
-                  className="animate-spin h-5 w-5 mr-2 text-white"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                  ></path>
+                <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
                 </svg>
+                Processing...
               </>
             ) : (
               "Submit Transaction"
             )}
           </button>
         </form>
-        <p
-          className={`mt-4 text-center ${
-            statusType === "success"
-              ? "text-green-500"
-              : statusType === "error"
-              ? "text-red-500"
-              : "text-black"
-          }`}
-        >
+        <p className={`mt-4 text-center ${statusType === "success" ? "text-green-500" : statusType === "error" ? "text-red-500" : "text-black"}`}>
           {status}
         </p>
       </div>
