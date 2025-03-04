@@ -113,11 +113,11 @@ export default function Home() {
         {swapOption === "FLOP_TO_WFLOP" ? (
           <>
             <p className="mb-4 text-center text-black">
-              To swap FLOP to WFLOP, please send your FLOP tokens to the following deposit address:
+              To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below:
             </p>
             <p className="font-mono text-blue-600 text-center mb-4">{depositAddress}</p>
             <p className="mb-4 text-center text-black">
-              Once the transfer is confirmed, enter the transaction ID for your deposit and the Polygon (POL) address where you’d like to receive your WFLOP tokens.
+              Once the deposit is confirmed, enter the Polygon address where you’d like to receive your WFLOP tokens and the Flopcoin transaction ID for the deposit you just made.
             </p>
             <label className="block text-gray-700 mb-2">Polygon Address:</label>
             <input
@@ -135,11 +135,11 @@ export default function Home() {
         ) : (
           <>
             <p className="mb-4 text-center text-black">
-              To swap WFLOP to FLOP, please send your WFLOP tokens to the designated burn address:
+              To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below:
             </p>
             <p className="font-mono text-blue-600 text-center mb-4">{wfloBurnAddress}</p>
             <p className="mb-4 text-center text-black">
-              Once the transfer is confirmed, enter the transaction ID for your deposit and the Flopcoin (FLOP) address where you’d like to receive your tokens.
+              Once the deposit is confirmed, enter the Flopcoin address where you’d like to receive your FLOP coins and the Polygon transaction ID for the deposit you just made.
             </p>
             <label className="block text-gray-700 mb-2">Flopcoin Address:</label>
             <input
