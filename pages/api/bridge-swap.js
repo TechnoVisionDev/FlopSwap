@@ -252,28 +252,37 @@ export default async function handler(req, res) {
       }
 
       // --- FLOP SIDE ---
-      // Unlock the wallet before sending coins using walletpassphrase.
+      // Attempt to unlock the wallet before sending coins using walletpassphrase.
       const unlockPayload = {
         jsonrpc: "1.0",
         id: "walletpassphrase",
         method: "walletpassphrase",
         params: [WALLET_PASS, 60]
       };
-      console.log("Unlocking FLOP wallet...");
-      const unlockResponse = await fetch(flopRpcURL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": authHeader,
-        },
-        body: JSON.stringify(unlockPayload)
-      });
-      const unlockData = await unlockResponse.json();
-      if (unlockData.error) {
-        console.error("Wallet unlock error:", unlockData.error);
-        return res.status(500).json({ error: "Wallet unlock error", details: unlockData.error });
+      console.log("Attempting to unlock FLOP wallet...");
+      let unlockData;
+      try {
+        const unlockResponse = await fetch(flopRpcURL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": authHeader,
+          },
+          body: JSON.stringify(unlockPayload)
+        });
+        unlockData = await unlockResponse.json();
+
+        if (unlockData.error) {
+          // Check for unencrypted wallet error (error code -15)
+          if (unlockData.error.code !== -15) {
+            console.error("Wallet unlock error:", unlockData.error);
+            return res.status(500).json({ error: "Wallet unlock error", details: unlockData.error });
+          }
+        }
+      } catch (err) {
+        console.error("Error during wallet unlock RPC call:", err);
+        return res.status(500).json({ error: "Wallet unlock RPC call failed", details: err.message });
       }
-      console.log("Wallet unlocked successfully.");
 
       // Now send FLOP coins using sendtoaddress (using the RPC credentials as the node expects).
       const coinAmount = ethers.utils.formatUnits(burnAmount, 18); // convert burnAmount from wei to coin units
