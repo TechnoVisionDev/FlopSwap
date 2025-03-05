@@ -157,8 +157,8 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#212121] flex flex-col items-center p-4">
-      <div className="mb-4 flex space-x-2">
+    <div className="min-h-screen bg-[#212121] flex flex-col items-center p-4 sm:p-6 overflow-x-hidden">
+      <div className="mb-4 flex flex-wrap justify-center space-x-2">
         <button
           onClick={() => {
             setSwapOption("FLOP_TO_WFLOP");
@@ -210,18 +210,18 @@ export default function Home() {
         </button>
       </div>
       <div className="max-w-3xl w-full bg-white shadow-md rounded-lg p-6">
-        <h1 className="text-3xl font-bold mb-8 text-center text-[#212121]">
+        <h1 className="text-3xl font-bold mb-8 text-center text-[#212121] break-words">
           {swapOption === "FLOP_TO_WFLOP" ? "FLOP to WFLOP Bridge" : "WFLOP to FLOP Bridge"}
         </h1>
         {swapOption === "FLOP_TO_WFLOP" ? (
           <>
             <div className="mb-4 text-left text-black">
-              <p className="mb-4">
+              <p className="mb-4 break-words">
                 <b>1.)</b> To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below.
                 Make sure to use the Flopcoin Core wallet for this transaction!
               </p>
               <div className="flex items-center mb-4">
-                <p className="font-mono text-blue-600 text-left">
+                <p className="font-mono text-blue-600 text-left break-all">
                   {process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS}
                 </p>
                 <button
@@ -233,14 +233,14 @@ export default function Home() {
                   Copy
                 </button>
               </div>
-              <p className="mt-2">
+              <p className="mt-2 break-words">
                 <span className="font-bold">2.)</span> Once the deposit is confirmed, enter your Flopcoin Core wallet address, the Polygon (POL) address where you would like to receive your WFLOP, and the FLOP transaction ID for the deposit you just made.
               </p>
-              <p className="mt-2">
+              <p className="mt-2 break-words">
                 <span className="font-bold">3.)</span> To prove you made the deposit, you must sign a message using your Flopcoin Core wallet. The message <strong>MUST</strong> only contain the exact TXID as you specified here. Make sure you sign using the wallet address you used to deposit your coins to the bridge.
               </p>
             </div>
-            <label className="block text-gray-700 mb-2">Polygon Address:</label>
+            <label className="block text-gray-700 mb-2 break-words">Polygon Address:</label>
             <div className="flex items-center mb-4">
               <input
                 type="text"
@@ -259,7 +259,7 @@ export default function Home() {
                 MetaMask
               </button>
             </div>
-            <label className="block text-gray-700 mb-2">Flopcoin Core Address:</label>
+            <label className="block text-gray-700 mb-2 break-words">Flopcoin Core Address:</label>
             <input
               type="text"
               value={flopSignerAddress}
@@ -268,7 +268,7 @@ export default function Home() {
               className="w-full text-black p-2 border border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
-            <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
+            <label className="block text-gray-700 mb-2 break-words">Deposit Transaction ID:</label>
             <input
               type="text"
               value={txid}
@@ -277,7 +277,7 @@ export default function Home() {
               className="w-full p-2 border text-black border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
-            <label className="block text-gray-700 mb-2">Signature (Base64):</label>
+            <label className="block text-gray-700 mb-2 break-words">Signature (Base64):</label>
             <input
               type="text"
               value={signature}
@@ -289,12 +289,12 @@ export default function Home() {
           </>
         ) : (
           <>
-            <p className="mb-4 text-left text-black">
+            <p className="mb-4 text-left text-black break-words">
               <b>1.)</b> To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below using the Polygon network.
               Make sure to use a MetaMask account for this transaction!
             </p>
             <div className="flex items-center mb-4">
-              <p className="font-mono text-blue-600 text-left">
+              <p className="font-mono text-blue-600 text-left break-all">
                 {process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS}
               </p>
               <button
@@ -306,10 +306,10 @@ export default function Home() {
                 Copy
               </button>
             </div>
-            <p className="mb-4 text-left text-black">
+            <p className="mb-4 text-left text-black break-words">
               <b>2.)</b> Once the deposit is confirmed, enter the Flopcoin address where you’d like to receive your FLOP coins and the Polygon transaction ID for the deposit you just made. You will be asked to sign the transaction using MetaMask so make sure it is installed.
             </p>
-            <label className="block text-gray-700 mb-2">Flopcoin Address:</label>
+            <label className="block text-gray-700 mb-2 break-words">Flopcoin Address:</label>
             <input
               type="text"
               value={targetAddress}
@@ -318,7 +318,7 @@ export default function Home() {
               className="w-full text-black p-2 border border-gray-300 rounded mb-4"
               disabled={isLoading}
             />
-            <label className="block text-gray-700 mb-2">Deposit Transaction ID:</label>
+            <label className="block text-gray-700 mb-2 break-words">Deposit Transaction ID:</label>
             <input
               type="text"
               value={txid}
@@ -347,7 +347,7 @@ export default function Home() {
             )}
           </button>
         </form>
-        <p className={`mt-4 text-center ${statusType === "success" ? "text-green-500" : statusType === "error" ? "text-red-500" : "text-black"}`}>
+        <p className={`mt-4 text-center ${statusType === "success" ? "text-green-500" : statusType === "error" ? "text-red-500" : "text-black"} break-words`}>
           {status}
         </p>
       </div>
