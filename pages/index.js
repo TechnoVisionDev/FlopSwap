@@ -59,6 +59,11 @@ export default function Home() {
     }
   };
 
+  // Function to copy a given address to the clipboard
+  const handleCopy = (address) => {
+    navigator.clipboard.writeText(address);
+  };
+
   // For WFLOP → FLOP: sign the TXID automatically via MetaMask.
   const signTxid = async (currentProvider, txidToSign) => {
     try {
@@ -178,13 +183,22 @@ export default function Home() {
         {swapOption === "FLOP_TO_WFLOP" ? (
           <>
             <div className="mb-4 text-left text-black">
-              <p className="mb-4 text-left text-black">
-              <b>1.)</b> To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below.
-              Make sure you only use the Flopcoin Core wallet for this transaction!
+              <p className="mb-4">
+                <b>1.)</b> To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below.
+                Make sure you only use the Flopcoin Core wallet for this transaction!
               </p>
-              <p className="font-mono text-blue-600 text-left mb-4">
-                {process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS}
-              </p>
+              <div className="flex items-center mb-4">
+                <p className="font-mono text-blue-600 text-left">
+                  {process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS)}
+                  className="ml-2 px-2 py-1 bg-blue-500 text-white text-sm rounded"
+                >
+                  Copy
+                </button>
+              </div>
               <p className="mt-2">
                 <span className="font-bold">2.)</span> Once the deposit is confirmed, enter your Flopcoin Core wallet address, the Polygon (POL) address where you would like to receive your WFLOP, and the FLOP transaction ID for the deposit you just made.
               </p>
@@ -245,9 +259,18 @@ export default function Home() {
               <b>1.)</b> To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below.
               Make sure you only use a MetaMask account for this transaction!
             </p>
-            <p className="font-mono text-blue-600 text-left mb-4">
-              {process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS}
-            </p>
+            <div className="flex items-center mb-4">
+              <p className="font-mono text-blue-600 text-left">
+                {process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS}
+              </p>
+              <button
+                type="button"
+                onClick={() => handleCopy(process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS)}
+                className="ml-2 px-2 py-1 bg-blue-500 text-white text-sm rounded"
+              >
+                Copy
+              </button>
+            </div>
             <p className="mb-4 text-left text-black">
               <b>2.)</b> Once the deposit is confirmed, enter the Flopcoin address where you’d like to receive your FLOP coins and the Polygon transaction ID for the deposit you just made. You will be asked to sign the transaction using MetaMask so make sure it is installed.
             </p>
