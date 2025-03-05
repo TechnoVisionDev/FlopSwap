@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
+import Image from "next/image";
 
 export default function Home() {
   // For WFLOP → FLOP: automatically get the signing address from MetaMask.
@@ -65,6 +66,7 @@ export default function Home() {
   };
 
   // For WFLOP → FLOP: sign the TXID automatically via MetaMask.
+  // Modified to handle errors gracefully.
   const signTxid = async (currentProvider, txidToSign) => {
     try {
       const signer = currentProvider.getSigner();
@@ -75,7 +77,10 @@ export default function Home() {
       return sig;
     } catch (err) {
       console.error("Error signing message:", err);
-      throw new Error("Failed to sign message");
+      setStatus("Failed to sign message");
+      setStatusType("error");
+      setIsLoading(false);
+      return null;
     }
   };
 
@@ -101,13 +106,17 @@ export default function Home() {
         // Use MetaMask to sign.
         const connectedAddress = await ensureWalletConnected();
         const sig = await signTxid(provider, txid);
+        if (!sig) {
+          // If signing fails, exit early.
+          return;
+        }
         payload = {
           transactionHash: txid,
           signerAddress: connectedAddress,
           targetAddress,
           swapOption,
           signature: sig,
-          signMessageText: txid
+          signMessageText: txid,
         };
       } else {
         // FLOP → WFLOP: use manually provided FLOP wallet address and signature.
@@ -117,7 +126,7 @@ export default function Home() {
           targetAddress,
           swapOption,
           signature: signature,
-          signMessageText: txid
+          signMessageText: txid,
         };
       }
 
@@ -148,7 +157,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#212121] flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-[#212121] flex flex-col items-center p-4">
       <div className="mb-4 flex space-x-2">
         <button
           onClick={() => {
@@ -158,10 +167,22 @@ export default function Home() {
             setSignature("");
             setSignMessageText("");
             setFlopSignerAddress("");
+            setStatus("");
+            setStatusType("");
           }}
-          className={`px-4 py-2 rounded ${swapOption === "FLOP_TO_WFLOP" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"}`}
+          className={`px-4 py-2 rounded ${swapOption === "FLOP_TO_WFLOP" ? "h-12 bg-blue-500 text-white" : "bg-gray-300 text-black"}`}
         >
-          FLOP to WFLOP
+          <span>FLOP</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5 inline mx-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          </svg>
+          <span>WFLOP</span>
         </button>
         <button
           onClick={() => {
@@ -170,10 +191,22 @@ export default function Home() {
             setTargetAddress("");
             setSignature("");
             setSignMessageText("");
+            setStatus("");
+            setStatusType("");
           }}
-          className={`px-4 py-2 rounded ${swapOption === "WFLOP_TO_FLOP" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"}`}
+          className={`px-4 py-2 rounded ${swapOption === "WFLOP_TO_FLOP" ? "h-12 bg-blue-500 text-white" : "bg-gray-300 text-black"}`}
         >
-          WFLOP to FLOP
+          <span>WFLOP</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5 inline mx-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          </svg>
+          <span>FLOP</span>
         </button>
       </div>
       <div className="max-w-3xl w-full bg-white shadow-md rounded-lg p-6">
@@ -185,7 +218,7 @@ export default function Home() {
             <div className="mb-4 text-left text-black">
               <p className="mb-4">
                 <b>1.)</b> To swap FLOP to WFLOP, send Flopcoin (FLOP) to the deposit address below.
-                Make sure you only use the Flopcoin Core wallet for this transaction!
+                Make sure to use the Flopcoin Core wallet for this transaction!
               </p>
               <div className="flex items-center mb-4">
                 <p className="font-mono text-blue-600 text-left">
@@ -194,7 +227,8 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => handleCopy(process.env.NEXT_PUBLIC_FLOP_DEPOSIT_ADDRESS)}
-                  className="ml-2 px-2 py-1 bg-blue-500 text-white text-sm rounded"
+                  className="ml-2 px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded"
+                  title="Copy Address To Clipboard"
                 >
                   Copy
                 </button>
@@ -219,7 +253,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={useMetaMaskAddress}
-                className="ml-2 px-4 py-2 bg-blue-500 text-white rounded"
+                className="ml-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
                 disabled={isLoading}
               >
                 MetaMask
@@ -256,8 +290,8 @@ export default function Home() {
         ) : (
           <>
             <p className="mb-4 text-left text-black">
-              <b>1.)</b> To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below.
-              Make sure you only use a MetaMask account for this transaction!
+              <b>1.)</b> To swap WFLOP to FLOP, send Wrapped Flopcoin (WFLOP) to the deposit address below using the Polygon network.
+              Make sure to use a MetaMask account for this transaction!
             </p>
             <div className="flex items-center mb-4">
               <p className="font-mono text-blue-600 text-left">
@@ -266,7 +300,8 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => handleCopy(process.env.NEXT_PUBLIC_WFLOP_DEPOSIT_ADDRESS)}
-                className="ml-2 px-2 py-1 bg-blue-500 text-white text-sm rounded"
+                className="ml-2 px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded"
+                title="Copy Address To Clipboard"
               >
                 Copy
               </button>
@@ -297,7 +332,7 @@ export default function Home() {
         <form onSubmit={handleSubmit}>
           <button
             type="submit"
-            className="w-full bg-green-500 text-white px-6 py-3 rounded-md flex items-center justify-center"
+            className="w-full bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-md flex items-center justify-center"
             disabled={isLoading}
           >
             {isLoading ? (
