@@ -171,8 +171,14 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "The transaction was not sent to the correct deposit address." });
       }
 
+      // Convert the deposit amount to a fixed‑point string with 8 decimals,
+      // since FLOP (a Dogecoin fork) likely uses 8 decimals.
+      // Then convert that value into an 18-decimal BigNumber for WFLOP minting.
       const depositAmountInCoins = matchingOutput.amount;
-      const depositAmount = ethers.utils.parseUnits(depositAmountInCoins.toString(), 18);
+      const depositAmountString = Number(depositAmountInCoins)
+        .toFixed(8)
+        .replace(/\.?0+$/, "");
+      const depositAmount = ethers.utils.parseUnits(depositAmountString, 18);
 
       // Mint WFLOP tokens on Polygon.
       const polygonProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
@@ -308,7 +314,9 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Unable to unlock wallet due to network issues. Please try again later." });
       }
 
-      const coinAmount = ethers.utils.formatUnits(burnAmount, 18);
+      // Convert the burned amount (18 decimals) into a coin amount with 8 decimals,
+      // since the FLOP chain expects 8-decimal precision.
+      const coinAmount = Number(ethers.utils.formatUnits(burnAmount, 18)).toFixed(8);
       const sendPayload = {
         jsonrpc: "1.0",
         id: "sendtoaddress",
