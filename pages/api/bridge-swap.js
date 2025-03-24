@@ -359,6 +359,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid swap option provided." });
     }
   } catch (error) {
+    console.error("Swap error:", error);
     return res.status(500).json({ error: "An unexpected error occurred. Please try again later." });
-  }
+  }  
 }
